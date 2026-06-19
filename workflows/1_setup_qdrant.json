@@ -1,0 +1,62 @@
+{
+  "name": "RAG - 1. Setup Qdrant Collection",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "11111111-1111-1111-1111-000000000001",
+      "name": "คลิกเพื่อสร้าง Collection",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 180],
+      "notes": "รันครั้งแรกเพื่อสร้าง Qdrant Collection"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://qdrant:6333/collections/my_documents",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"vectors\": {\"size\": 1024, \"distance\": \"Cosine\"}}",
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-000000000002",
+      "name": "Create Collection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 180]
+    },
+    {
+      "parameters": {},
+      "id": "11111111-1111-1111-1111-000000000003",
+      "name": "คลิกเพื่อลบ Collection (ล้างข้อมูล)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 380]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "http://qdrant:6333/collections/my_documents",
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-000000000004",
+      "name": "Delete Collection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 380]
+    }
+  ],
+  "connections": {
+    "คลิกเพื่อสร้าง Collection": {
+      "main": [[{"node": "Create Collection", "type": "main", "index": 0}]]
+    },
+    "คลิกเพื่อลบ Collection (ล้างข้อมูล)": {
+      "main": [[{"node": "Delete Collection", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

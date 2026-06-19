@@ -1,0 +1,10 @@
+# ข้อมูล n8n backup (sensitive)
+n8n_backup/
+
+# ไฟล์เอกสารที่อัปโหลด
+data/pending/*
+data/processed/*
+
+# ยกเว้น .gitkeep เพื่อให้ folder ติดไปด้วย
+!data/pending/.gitkeep
+!data/processed/.gitkeep
