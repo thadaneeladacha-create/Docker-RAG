@@ -21,11 +21,13 @@ x-n8n: &service-n8n
     - N8N_ENCRYPTION_KEY
     - N8N_USER_MANAGEMENT_JWT_SECRET
     - OLLAMA_HOST=${OLLAMA_HOST:-ollama:11434}
-    - N8N_RESTRICT_FILE_ACCESS_TO=/data/shared
+    - N8N_RESTRICT_FILE_ACCESS_TO=/data
+    - CHOKIDAR_USEPOLLING=1
     - NODES_EXCLUDE=[]
     - N8N_COMMUNITY_PACKAGES_ENABLED=true
     - N8N_SECURE_COOKIE=false
     - GENERIC_TIMEZONE=Asia/Bangkok
+    - NODE_FUNCTION_ALLOW_BUILTIN=fs,path
   env_file:
     - path: .env
       required: true
@@ -76,10 +78,10 @@ x-docling: &service-docling
     - ./shared:/shared
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-    interval: 30s
-    timeout: 10s
-    retries: 3
-    start_period: 60s
+    interval: 60s
+    timeout: 30s
+    retries: 5
+    start_period: 120s
 
 services:
   postgres:

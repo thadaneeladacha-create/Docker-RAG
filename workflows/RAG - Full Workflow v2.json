@@ -1,4 +1,5 @@
 {
+  "id": "RAGFullWorkflowV2",
   "name": "RAG - Full Workflow v2",
   "nodes": [
     {
@@ -129,7 +130,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "success",
                     "operator": {
                       "type": "string",
@@ -153,7 +154,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "pending",
                     "operator": {
                       "type": "string",
@@ -177,7 +178,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "started",
                     "operator": {
                       "type": "string",
@@ -350,13 +351,13 @@
     },
     {
       "parameters": {
-        "command": "=mv {{ $('Local File Trigger').item.json.path }} /data/rag-files/processed"
+        "jsCode": "const fs = require('fs');\n\nconst filePath = $('Local File Trigger').item.json.path;\nconst filename = $('Local File Trigger').item.json.name;\nconst destPath = '/data/rag-files/processed/' + filename;\n\nfs.renameSync(filePath, destPath);\n\nreturn [{ json: { success: true, moved: filename } }];"
       },
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [3360, 720],
       "id": "3bd10991-2dfc-4eee-bb00-5f617850f1cf",
-      "name": "Execute Command1"
+      "name": "Move to Processed"
     },
     {
       "parameters": {
@@ -371,7 +372,7 @@
     },
     {
       "parameters": {
-        "agent": "conversationalAgent",
+        "agent": "toolsAgent",
         "promptType": "define",
         "text": "={{ $json.chatInput }}",
         "systemMessage": "คุณคือ AI Assistant ผู้เชี่ยวชาญในการค้นหาและสรุปข้อมูลจากเอกสาร\nให้ใช้ tool search_documents เพื่อค้นหาข้อมูลที่เกี่ยวข้องจากเอกสารก่อนตอบคำถามทุกครั้ง\nหากพบรูปภาพในเอกสาร ให้แสดงผลในรูปแบบ Markdown: ![คำอธิบาย](URL)\nตอบเป็นภาษาเดียวกับที่ผู้ใช้ถาม\nหากไม่พบข้อมูลในเอกสาร ให้บอกตรงๆ ว่าไม่มีข้อมูลนั้นในฐานข้อมูล",

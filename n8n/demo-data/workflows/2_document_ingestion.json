@@ -3,6 +3,7 @@
   "nodes": [
     {
       "parameters": {
+        "triggerOn": "folder",
         "path": "/data/rag-files/pending",
         "events": ["add"],
         "options": {}
@@ -15,8 +16,8 @@
     },
     {
       "parameters": {
-        "operation": "read",
-        "fileName": "={{ $json.path }}"
+        "fileSelector": "={{ $json.path }}",
+        "options": {}
       },
       "id": "22222222-2222-2222-2222-000000000002",
       "name": "Read PDF File",
@@ -27,20 +28,19 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://docling:5001/v1/convert/source",
+        "url": "http://docling:5001/v1/convert/file/async",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
             {
               "parameterType": "formBinaryData",
-              "name": "file",
+              "name": "files",
               "inputDataFieldName": "data"
             },
             {
-              "parameterType": "formData",
               "name": "image_export_mode",
-              "value": "reference"
+              "value": "referenced"
             }
           ]
         },
@@ -66,8 +66,7 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=http://docling:5001/v1/convert/status/{{ $('Send to Docling (OCR)').item.json.task_id }}",
+        "url": "=http://docling:5001/v1/status/poll/{{ $('Send to Docling (OCR)').item.json.task_id }}",
         "options": {}
       },
       "id": "22222222-2222-2222-2222-000000000005",
@@ -78,7 +77,6 @@
     },
     {
       "parameters": {
-        "mode": "rules",
         "rules": {
           "values": [
             {
@@ -86,7 +84,7 @@
                 "options": {"caseSensitive": false},
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "success",
                     "operator": {"type": "string", "operation": "equals"}
                   }
@@ -100,7 +98,7 @@
                 "options": {"caseSensitive": false},
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "pending",
                     "operator": {"type": "string", "operation": "equals"}
                   }
@@ -114,7 +112,7 @@
                 "options": {"caseSensitive": false},
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.status }}",
+                    "leftValue": "={{ $json.task_status }}",
                     "rightValue": "started",
                     "operator": {"type": "string", "operation": "equals"}
                   }
@@ -125,7 +123,9 @@
             }
           ]
         },
-        "fallbackOutput": "extra"
+        "options": {
+          "fallbackOutput": "extra"
+        }
       },
       "id": "22222222-2222-2222-2222-000000000006",
       "name": "Check Status",
@@ -135,13 +135,24 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst statusResponse = item.json;\n\n// ดึงเนื้อหาจาก Docling result\nconst result = statusResponse.result || statusResponse;\nconst document = result.document || result;\n\n// ดึง markdown content\nlet markdownContent = document.export_to_markdown ||\n                      document.md_content ||\n                      document.content ||\n                      JSON.stringify(document);\n\n// แปลง image path เป็น URL ที่เข้าถึงได้ผ่าน nginx (port 8080)\nmarkdownContent = markdownContent.replace(\n  /!\\[([^\\]]*)\\]\\(([^)]+)\\)/g,\n  (match, alt, imgPath) => {\n    const filename = imgPath.split('/').pop();\n    return `![${alt}](http://localhost:8080/${filename})`;\n  }\n);\n\nconst sourcePath = $('Watch Pending Folder').item.json.path || 'unknown';\nconst filename = $('Watch Pending Folder').item.json.name || 'unknown.pdf';\n\nreturn [{\n  json: {\n    text: markdownContent,\n    metadata: {\n      source: sourcePath,\n      filename: filename,\n      processed_at: new Date().toISOString()\n    }\n  }\n}];"
+        "url": "=http://docling:5001/v1/result/{{ $('Send to Docling (OCR)').item.json.task_id }}",
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-000000000015",
+      "name": "Get Docling Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst statusResponse = item.json;\n\nconst result = statusResponse.result || statusResponse;\nconst document = result.document || result;\n\nlet markdownContent = document.export_to_markdown ||\n                      document.md_content ||\n                      document.content ||\n                      JSON.stringify(document);\n\nmarkdownContent = markdownContent.replace(\n  /!\\[([^\\]]*)\\]\\(([^)]+)\\)/g,\n  (match, alt, imgPath) => {\n    const filename = imgPath.split('/').pop();\n    return `![${alt}](http://localhost:8080/${filename})`;\n  }\n);\n\nconst sourcePath = $('Watch Pending Folder').item.json.path || 'unknown';\nconst filename = $('Watch Pending Folder').item.json.name || 'unknown.pdf';\n\nreturn [{\n  json: {\n    text: markdownContent,\n    metadata: {\n      source: sourcePath,\n      filename: filename,\n      processed_at: new Date().toISOString()\n    }\n  }\n}];"
       },
       "id": "22222222-2222-2222-2222-000000000007",
       "name": "Transform Image Paths",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 160]
+      "position": [1780, 160]
     },
     {
       "parameters": {
@@ -151,7 +162,7 @@
       "name": "Copy Images to Web Folder",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [1780, 160]
+      "position": [2000, 160]
     },
     {
       "parameters": {
@@ -167,10 +178,11 @@
       "name": "Insert to Qdrant",
       "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
       "typeVersion": 1,
-      "position": [2000, 160]
+      "position": [2220, 160]
     },
     {
       "parameters": {
+        "textSplittingMode": "custom",
         "dataType": "json",
         "jsonData": "={{ $json.text }}",
         "options": {
@@ -186,43 +198,43 @@
       "id": "22222222-2222-2222-2222-000000000010",
       "name": "Document Loader",
       "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
-      "typeVersion": 1,
-      "position": [2000, 360]
+      "typeVersion": 1.1,
+      "position": [2220, 360]
     },
     {
       "parameters": {
         "chunkSize": 1500,
         "chunkOverlap": 150,
         "options": {
-          "language": "markdown"
+          "splitCode": "markdown"
         }
       },
       "id": "22222222-2222-2222-2222-000000000011",
       "name": "Text Splitter (Markdown)",
       "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
       "typeVersion": 1,
-      "position": [2000, 540]
+      "position": [2220, 540]
     },
     {
       "parameters": {
-        "model": "qwen3:embedding",
+        "model": "qwen3-embedding:0.6b",
         "baseUrl": "http://ollama:11434"
       },
       "id": "22222222-2222-2222-2222-000000000012",
       "name": "Ollama Embeddings",
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
-      "position": [2220, 360]
+      "position": [2440, 360]
     },
     {
       "parameters": {
-        "command": "=mv \"/data/rag-files/pending/{{ $('Watch Pending Folder').item.json.name }}\" \"/data/rag-files/processed/{{ $('Watch Pending Folder').item.json.name }}\""
+        "command": "=mv \"{{ $('Watch Pending Folder').item.json.path }}\" \"/data/rag-files/processed/{{ $('Watch Pending Folder').item.json.name }}\""
       },
       "id": "22222222-2222-2222-2222-000000000013",
       "name": "Move PDF to Processed",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [2220, 160]
+      "position": [2440, 160]
     },
     {
       "parameters": {
@@ -253,11 +265,14 @@
     },
     "Check Status": {
       "main": [
-        [{"node": "Transform Image Paths", "type": "main", "index": 0}],
+        [{"node": "Get Docling Result", "type": "main", "index": 0}],
         [{"node": "Wait 5s", "type": "main", "index": 0}],
         [{"node": "Wait 5s", "type": "main", "index": 0}],
         [{"node": "Stop and Error", "type": "main", "index": 0}]
       ]
+    },
+    "Get Docling Result": {
+      "main": [[{"node": "Transform Image Paths", "type": "main", "index": 0}]]
     },
     "Transform Image Paths": {
       "main": [[{"node": "Copy Images to Web Folder", "type": "main", "index": 0}]]
