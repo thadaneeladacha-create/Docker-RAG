@@ -27,7 +27,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://docling:5001/v1alpha/convert/source",
+        "url": "http://docling:5001/v1/convert/source",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -62,7 +62,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=http://docling:5001/v1alpha/convert/status/{{ $('Send to Docling (OCR)').item.json.task_id }}",
+        "url": "=http://docling:5001/v1/convert/status/{{ $('Send to Docling (OCR)').item.json.task_id }}",
         "options": {}
       },
       "id": "22222222-2222-2222-2222-000000000005",
