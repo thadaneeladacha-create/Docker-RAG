@@ -7,13 +7,12 @@
       "name": "คลิกเพื่อสร้าง Collection",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [240, 180],
-      "notes": "รันครั้งแรกเพื่อสร้าง Qdrant Collection"
+      "position": [240, 180]
     },
     {
       "parameters": {
         "method": "PUT",
-        "url": "http://qdrant:6333/collections/my_documents",
+        "url": "http://qdrant:6333/collections/multi-modal",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -37,7 +36,7 @@
     {
       "parameters": {
         "method": "DELETE",
-        "url": "http://qdrant:6333/collections/my_documents",
+        "url": "http://qdrant:6333/collections/multi-modal",
         "options": {}
       },
       "id": "11111111-1111-1111-1111-000000000004",

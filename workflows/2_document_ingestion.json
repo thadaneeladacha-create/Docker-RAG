@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "path": "/data/pending",
+        "path": "/data/rag-files/pending",
         "events": ["add"],
         "options": {}
       },
@@ -34,8 +34,13 @@
           "parameters": [
             {
               "parameterType": "formBinaryData",
-              "name": "files",
+              "name": "file",
               "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "image_export_mode",
+              "value": "reference"
             }
           ]
         },
@@ -96,13 +101,27 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.status }}",
-                    "rightValue": "failure",
+                    "rightValue": "pending",
                     "operator": {"type": "string", "operation": "equals"}
                   }
                 ]
               },
               "renameOutput": true,
-              "outputKey": "failure"
+              "outputKey": "pending"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "started",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "started"
             }
           ]
         },
@@ -116,29 +135,39 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst doclingResult = item.json;\n\n// ดึง markdown content จาก Docling\nconst document = doclingResult.document || doclingResult.result || doclingResult;\nconst markdownContent = document.export_to_markdown || document.md_content || document.content || JSON.stringify(document);\n\n// ดึงชื่อไฟล์ต้นทาง\nconst sourcePath = $('Watch Pending Folder').item.json.path || 'unknown';\nconst filename = $('Watch Pending Folder').item.json.name || 'unknown.pdf';\n\n// ประมวลผลรูปภาพ (ถ้ามี)\nconst images = [];\nif (document.pictures) {\n  for (const pic of document.pictures) {\n    if (pic.image && pic.image.uri) {\n      images.push({\n        uri: pic.image.uri,\n        page: pic.prov?.[0]?.page_no || 0\n      });\n    }\n  }\n}\n\nreturn [{\n  json: {\n    text: markdownContent,\n    metadata: {\n      source: sourcePath,\n      filename: filename,\n      processed_at: new Date().toISOString(),\n      images_count: images.length\n    }\n  }\n}];"
+        "jsCode": "const item = $input.first();\nconst statusResponse = item.json;\n\n// ดึงเนื้อหาจาก Docling result\nconst result = statusResponse.result || statusResponse;\nconst document = result.document || result;\n\n// ดึง markdown content\nlet markdownContent = document.export_to_markdown ||\n                      document.md_content ||\n                      document.content ||\n                      JSON.stringify(document);\n\n// แปลง image path เป็น URL ที่เข้าถึงได้ผ่าน nginx (port 8080)\nmarkdownContent = markdownContent.replace(\n  /!\\[([^\\]]*)\\]\\(([^)]+)\\)/g,\n  (match, alt, imgPath) => {\n    const filename = imgPath.split('/').pop();\n    return `![${alt}](http://localhost:8080/${filename})`;\n  }\n);\n\nconst sourcePath = $('Watch Pending Folder').item.json.path || 'unknown';\nconst filename = $('Watch Pending Folder').item.json.name || 'unknown.pdf';\n\nreturn [{\n  json: {\n    text: markdownContent,\n    metadata: {\n      source: sourcePath,\n      filename: filename,\n      processed_at: new Date().toISOString()\n    }\n  }\n}];"
       },
       "id": "22222222-2222-2222-2222-000000000007",
-      "name": "Extract Text & Images",
+      "name": "Transform Image Paths",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 180]
+      "position": [1560, 160]
+    },
+    {
+      "parameters": {
+        "command": "cp /data/shared/docling-scratch/*.png /data/shared/extracted-images/ 2>/dev/null || true"
+      },
+      "id": "22222222-2222-2222-2222-000000000008",
+      "name": "Copy Images to Web Folder",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1780, 160]
     },
     {
       "parameters": {
         "mode": "insert",
         "qdrantCollection": {
           "__rl": true,
-          "value": "my_documents",
+          "value": "multi-modal",
           "mode": "id"
         },
         "options": {}
       },
-      "id": "22222222-2222-2222-2222-000000000008",
+      "id": "22222222-2222-2222-2222-000000000009",
       "name": "Insert to Qdrant",
       "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
       "typeVersion": 1,
-      "position": [1780, 180]
+      "position": [2000, 160]
     },
     {
       "parameters": {
@@ -154,44 +183,56 @@
           }
         }
       },
-      "id": "22222222-2222-2222-2222-000000000009",
+      "id": "22222222-2222-2222-2222-000000000010",
       "name": "Document Loader",
       "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
       "typeVersion": 1,
-      "position": [1780, 380]
+      "position": [2000, 360]
     },
     {
       "parameters": {
         "chunkSize": 1500,
         "chunkOverlap": 150,
-        "options": {}
+        "options": {
+          "language": "markdown"
+        }
       },
-      "id": "22222222-2222-2222-2222-000000000010",
-      "name": "Text Splitter",
+      "id": "22222222-2222-2222-2222-000000000011",
+      "name": "Text Splitter (Markdown)",
       "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
       "typeVersion": 1,
-      "position": [1780, 560]
+      "position": [2000, 540]
     },
     {
       "parameters": {
         "model": "qwen3:embedding",
         "baseUrl": "http://ollama:11434"
       },
-      "id": "22222222-2222-2222-2222-000000000011",
+      "id": "22222222-2222-2222-2222-000000000012",
       "name": "Ollama Embeddings",
       "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
       "typeVersion": 1,
-      "position": [2000, 380]
+      "position": [2220, 360]
     },
     {
       "parameters": {
-        "command": "=mv \"/data/pending/{{ $('Watch Pending Folder').item.json.name }}\" \"/data/processed/{{ $('Watch Pending Folder').item.json.name }}\""
+        "command": "=mv \"/data/rag-files/pending/{{ $('Watch Pending Folder').item.json.name }}\" \"/data/rag-files/processed/{{ $('Watch Pending Folder').item.json.name }}\""
       },
-      "id": "22222222-2222-2222-2222-000000000012",
-      "name": "Move to Processed",
+      "id": "22222222-2222-2222-2222-000000000013",
+      "name": "Move PDF to Processed",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [2200, 180]
+      "position": [2220, 160]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Docling conversion failed. Status: {{ $json.status }}"
+      },
+      "id": "22222222-2222-2222-2222-000000000014",
+      "name": "Stop and Error",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1560, 480]
     }
   ],
   "connections": {
@@ -212,21 +253,25 @@
     },
     "Check Status": {
       "main": [
-        [{"node": "Extract Text & Images", "type": "main", "index": 0}],
-        [],
-        [{"node": "Wait 5s", "type": "main", "index": 0}]
+        [{"node": "Transform Image Paths", "type": "main", "index": 0}],
+        [{"node": "Wait 5s", "type": "main", "index": 0}],
+        [{"node": "Wait 5s", "type": "main", "index": 0}],
+        [{"node": "Stop and Error", "type": "main", "index": 0}]
       ]
     },
-    "Extract Text & Images": {
+    "Transform Image Paths": {
+      "main": [[{"node": "Copy Images to Web Folder", "type": "main", "index": 0}]]
+    },
+    "Copy Images to Web Folder": {
       "main": [[{"node": "Insert to Qdrant", "type": "main", "index": 0}]]
     },
     "Insert to Qdrant": {
-      "main": [[{"node": "Move to Processed", "type": "main", "index": 0}]]
+      "main": [[{"node": "Move PDF to Processed", "type": "main", "index": 0}]]
     },
     "Document Loader": {
       "ai_document": [[{"node": "Insert to Qdrant", "type": "ai_document", "index": 0}]]
     },
-    "Text Splitter": {
+    "Text Splitter (Markdown)": {
       "ai_textSplitter": [[{"node": "Document Loader", "type": "ai_textSplitter", "index": 0}]]
     },
     "Ollama Embeddings": {
