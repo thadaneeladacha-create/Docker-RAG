@@ -1,10 +1,19 @@
-# ข้อมูล n8n backup (sensitive)
+# ข้อมูล sensitive
 n8n_backup/
+.env
 
-# ไฟล์เอกสารที่อัปโหลด
-data/pending/*
-data/processed/*
+# ไฟล์เอกสารที่อัปโหลด (ไม่ push ขึ้น git)
+shared/rag-files/pending/*
+shared/rag-files/processed/*
+shared/docling-scratch/*
+shared/extracted-images/*
+data/
 
 # ยกเว้น .gitkeep เพื่อให้ folder ติดไปด้วย
-!data/pending/.gitkeep
-!data/processed/.gitkeep
+!shared/rag-files/pending/.gitkeep
+!shared/rag-files/processed/.gitkeep
+!shared/docling-scratch/.gitkeep
+!shared/extracted-images/.gitkeep
+
+# n8n demo-data marker
+n8n/demo-data/.imported
