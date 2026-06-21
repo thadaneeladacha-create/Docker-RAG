@@ -205,7 +205,7 @@
     },
     {
       "parameters": {
-        "model": "qwen3:embedding",
+        "model": "qwen3-embedding:0.6b",
         "baseUrl": "http://ollama:11434"
       },
       "id": "22222222-2222-2222-2222-000000000012",
