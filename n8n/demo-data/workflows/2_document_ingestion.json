@@ -1,0 +1,285 @@
+{
+  "name": "RAG - 2. Document Ingestion (PDF → Docling → Qdrant)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/data/rag-files/pending",
+        "events": ["add"],
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-000000000001",
+      "name": "Watch Pending Folder",
+      "type": "n8n-nodes-base.localFileTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileName": "={{ $json.path }}"
+      },
+      "id": "22222222-2222-2222-2222-000000000002",
+      "name": "Read PDF File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://docling:5001/v1/convert/source",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "image_export_mode",
+              "value": "reference"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-000000000003",
+      "name": "Send to Docling (OCR)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 5
+      },
+      "id": "22222222-2222-2222-2222-000000000004",
+      "name": "Wait 5s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [900, 300],
+      "webhookId": "wait-docling-status"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://docling:5001/v1/convert/status/{{ $('Send to Docling (OCR)').item.json.task_id }}",
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-000000000005",
+      "name": "Check Docling Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": false},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "success",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "success"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "pending",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "pending"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "started",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "started"
+            }
+          ]
+        },
+        "fallbackOutput": "extra"
+      },
+      "id": "22222222-2222-2222-2222-000000000006",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst statusResponse = item.json;\n\n// ดึงเนื้อหาจาก Docling result\nconst result = statusResponse.result || statusResponse;\nconst document = result.document || result;\n\n// ดึง markdown content\nlet markdownContent = document.export_to_markdown ||\n                      document.md_content ||\n                      document.content ||\n                      JSON.stringify(document);\n\n// แปลง image path เป็น URL ที่เข้าถึงได้ผ่าน nginx (port 8080)\nmarkdownContent = markdownContent.replace(\n  /!\\[([^\\]]*)\\]\\(([^)]+)\\)/g,\n  (match, alt, imgPath) => {\n    const filename = imgPath.split('/').pop();\n    return `![${alt}](http://localhost:8080/${filename})`;\n  }\n);\n\nconst sourcePath = $('Watch Pending Folder').item.json.path || 'unknown';\nconst filename = $('Watch Pending Folder').item.json.name || 'unknown.pdf';\n\nreturn [{\n  json: {\n    text: markdownContent,\n    metadata: {\n      source: sourcePath,\n      filename: filename,\n      processed_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "22222222-2222-2222-2222-000000000007",
+      "name": "Transform Image Paths",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 160]
+    },
+    {
+      "parameters": {
+        "command": "cp /data/shared/docling-scratch/*.png /data/shared/extracted-images/ 2>/dev/null || true"
+      },
+      "id": "22222222-2222-2222-2222-000000000008",
+      "name": "Copy Images to Web Folder",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1780, 160]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "multi-modal",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-000000000009",
+      "name": "Insert to Qdrant",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [2000, 160]
+    },
+    {
+      "parameters": {
+        "dataType": "json",
+        "jsonData": "={{ $json.text }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {"name": "source", "value": "={{ $json.metadata.source }}"},
+              {"name": "filename", "value": "={{ $json.metadata.filename }}"},
+              {"name": "processed_at", "value": "={{ $json.metadata.processed_at }}"}
+            ]
+          }
+        }
+      },
+      "id": "22222222-2222-2222-2222-000000000010",
+      "name": "Document Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [2000, 360]
+    },
+    {
+      "parameters": {
+        "chunkSize": 1500,
+        "chunkOverlap": 150,
+        "options": {
+          "language": "markdown"
+        }
+      },
+      "id": "22222222-2222-2222-2222-000000000011",
+      "name": "Text Splitter (Markdown)",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [2000, 540]
+    },
+    {
+      "parameters": {
+        "model": "qwen3:embedding",
+        "baseUrl": "http://ollama:11434"
+      },
+      "id": "22222222-2222-2222-2222-000000000012",
+      "name": "Ollama Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [2220, 360]
+    },
+    {
+      "parameters": {
+        "command": "=mv \"/data/rag-files/pending/{{ $('Watch Pending Folder').item.json.name }}\" \"/data/rag-files/processed/{{ $('Watch Pending Folder').item.json.name }}\""
+      },
+      "id": "22222222-2222-2222-2222-000000000013",
+      "name": "Move PDF to Processed",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2220, 160]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Docling conversion failed. Status: {{ $json.status }}"
+      },
+      "id": "22222222-2222-2222-2222-000000000014",
+      "name": "Stop and Error",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1560, 480]
+    }
+  ],
+  "connections": {
+    "Watch Pending Folder": {
+      "main": [[{"node": "Read PDF File", "type": "main", "index": 0}]]
+    },
+    "Read PDF File": {
+      "main": [[{"node": "Send to Docling (OCR)", "type": "main", "index": 0}]]
+    },
+    "Send to Docling (OCR)": {
+      "main": [[{"node": "Wait 5s", "type": "main", "index": 0}]]
+    },
+    "Wait 5s": {
+      "main": [[{"node": "Check Docling Status", "type": "main", "index": 0}]]
+    },
+    "Check Docling Status": {
+      "main": [[{"node": "Check Status", "type": "main", "index": 0}]]
+    },
+    "Check Status": {
+      "main": [
+        [{"node": "Transform Image Paths", "type": "main", "index": 0}],
+        [{"node": "Wait 5s", "type": "main", "index": 0}],
+        [{"node": "Wait 5s", "type": "main", "index": 0}],
+        [{"node": "Stop and Error", "type": "main", "index": 0}]
+      ]
+    },
+    "Transform Image Paths": {
+      "main": [[{"node": "Copy Images to Web Folder", "type": "main", "index": 0}]]
+    },
+    "Copy Images to Web Folder": {
+      "main": [[{"node": "Insert to Qdrant", "type": "main", "index": 0}]]
+    },
+    "Insert to Qdrant": {
+      "main": [[{"node": "Move PDF to Processed", "type": "main", "index": 0}]]
+    },
+    "Document Loader": {
+      "ai_document": [[{"node": "Insert to Qdrant", "type": "ai_document", "index": 0}]]
+    },
+    "Text Splitter (Markdown)": {
+      "ai_textSplitter": [[{"node": "Document Loader", "type": "ai_textSplitter", "index": 0}]]
+    },
+    "Ollama Embeddings": {
+      "ai_embedding": [[{"node": "Insert to Qdrant", "type": "ai_embedding", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
